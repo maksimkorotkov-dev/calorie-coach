@@ -1,0 +1,378 @@
+{% extends 'base.html' %}
+
+{% block title %}Calorie Diary{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Calorie Diary</h1>
+    <p>Track your daily food intake and activities</p>
+</div>
+
+{% if not profile %}
+<div class="card warning-card">
+    <p>You haven't set up your calorie profile yet. <a href="{% url 'calculator' %}">Calculate your daily target first</a></p>
+</div>
+{% endif %}
+
+<div class="week-navigation">
+    <a href="?date={{ week_start|date:'Y-m-d' }}&week=-1" class="btn btn-icon">&larr;</a>
+    <span class="week-label">{{ week_start|date:"M d" }} - {{ week_days.6|date:"M d, Y" }}</span>
+    <a href="?date={{ week_days.6|date:'Y-m-d' }}&week=1" class="btn btn-icon">&rarr;</a>
+    <a href="{% url 'diary' %}" class="btn btn-sm btn-primary">Today</a>
+</div>
+
+<div class="week-days">
+    {% for day in week_days %}
+    <a href="?date={{ day|date:'Y-m-d' }}" class="day-card {% if day == selected_date %}active{% endif %} {% if day == today %}today{% endif %}">
+        <span class="day-name">{{ day|date:"D" }}</span>
+        <span class="day-number">{{ day|date:"d" }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="diary-grid">
+    <div class="card daily-summary">
+        <h3>{{ selected_date|date:"l, F d" }}</h3>
+        
+        <div class="progress-section">
+            <div class="progress-bar">
+                <div class="progress-fill {% if day_remaining < 0 %}over{% endif %}" style="width: {{ day_progress }}%"></div>
+            </div>
+            <div class="calorie-stats">
+                <div class="stat">
+                    <span class="stat-value consumed">{{ day_consumed }}</span>
+                    <span class="stat-label">Consumed</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value burned">-{{ day_burned }}</span>
+                    <span class="stat-label">Burned</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value net">{{ day_net }}</span>
+                    <span class="stat-label">Net</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value remaining {% if day_remaining < 0 %}over{% endif %}">
+                        {% if day_remaining >= 0 %}{{ day_remaining }}{% else %}+{{ day_remaining|slice:"1:" }}{% endif %}
+                    </span>
+                    <span class="stat-label">{% if day_remaining >= 0 %}Remaining{% else %}Over{% endif %}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Food</h3>
+            <button type="button" class="btn btn-sm btn-primary" onclick="toggleModal('food-modal')">+ Add</button>
+        </div>
+        
+        {% if food_entries %}
+        <ul class="entry-list">
+            {% for entry in food_entries %}
+            <li class="entry-item">
+                <div class="entry-info">
+                    <span class="entry-name">{{ entry.name }}</span>
+                    {% if entry.protein or entry.fat or entry.carbs %}
+                    <span class="entry-macros">P:{{ entry.protein|default:0 }}g F:{{ entry.fat|default:0 }}g C:{{ entry.carbs|default:0 }}g</span>
+                    {% endif %}
+                </div>
+                <div class="entry-actions">
+                    <span class="entry-calories positive">+{{ entry.calories }} kcal</span>
+                    <a href="{% url 'delete_food' entry.id %}" class="btn-delete" title="Delete">x</a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state">
+            <p>No food entries</p>
+            <p class="text-muted">Add your first meal</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Activity</h3>
+            <button type="button" class="btn btn-sm btn-primary" onclick="toggleModal('activity-modal')">+ Add</button>
+        </div>
+        
+        {% if activity_entries %}
+        <ul class="entry-list">
+            {% for entry in activity_entries %}
+            <li class="entry-item">
+                <div class="entry-info">
+                    <span class="entry-name">{{ entry.name }}</span>
+                    <span class="entry-duration">{{ entry.duration }} min</span>
+                </div>
+                <div class="entry-actions">
+                    <span class="entry-calories negative">-{{ entry.calories_burned }} kcal</span>
+                    <a href="{% url 'delete_activity' entry.id %}" class="btn-delete" title="Delete">x</a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state">
+            <p>No activity entries</p>
+            <p class="text-muted">Add a workout</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card weekly-summary">
+    <h3>Weekly Summary</h3>
+    <div class="weekly-stats">
+        <div class="weekly-stat">
+            <span class="weekly-value">{{ weekly_stats.total_consumed|floatformat:0 }}</span>
+            <span class="weekly-label">Consumed kcal</span>
+        </div>
+        <div class="weekly-stat">
+            <span class="weekly-value">{{ weekly_stats.total_burned|floatformat:0 }}</span>
+            <span class="weekly-label">Burned kcal</span>
+        </div>
+        <div class="weekly-stat">
+            <span class="weekly-value {% if weekly_stats.total_net <= daily_target|add:daily_target|add:daily_target|add:daily_target|add:daily_target|add:daily_target|add:daily_target %}good{% else %}over{% endif %}">{{ weekly_stats.total_net|floatformat:0 }}</span>
+            <span class="weekly-label">Net kcal</span>
+        </div>
+        <div class="weekly-stat">
+            <span class="weekly-value">{{ weekly_stats.days_goal_met }} / 7</span>
+            <span class="weekly-label">Days on target</span>
+        </div>
+    </div>
+    <div class="macros-stats">
+        <div class="macro-stat protein">
+            <span class="macro-value">{{ weekly_stats.total_protein|floatformat:0 }}g / {{ weekly_macro_targets.protein_target }}g</span>
+            <div class="macro-progress-bar">
+                <div class="macro-progress-fill protein" style="width: {% widthratio weekly_stats.total_protein weekly_macro_targets.protein_target 100 %}%"></div>
+            </div>
+            <span class="macro-remaining {% if weekly_stats.protein_remaining < 0 %}over{% endif %}">
+                {% if weekly_stats.protein_remaining >= 0 %}Remaining: {{ weekly_stats.protein_remaining }}g{% else %}Over: {{ weekly_stats.protein_remaining|slice:"1:" }}g{% endif %}
+            </span>
+            <span class="macro-label">Protein</span>
+        </div>
+        <div class="macro-stat fat">
+            <span class="macro-value">{{ weekly_stats.total_fat|floatformat:0 }}g / {{ weekly_macro_targets.fat_target }}g</span>
+            <div class="macro-progress-bar">
+                <div class="macro-progress-fill fat" style="width: {% widthratio weekly_stats.total_fat weekly_macro_targets.fat_target 100 %}%"></div>
+            </div>
+            <span class="macro-remaining {% if weekly_stats.fat_remaining < 0 %}over{% endif %}">
+                {% if weekly_stats.fat_remaining >= 0 %}Remaining: {{ weekly_stats.fat_remaining }}g{% else %}Over: {{ weekly_stats.fat_remaining|slice:"1:" }}g{% endif %}
+            </span>
+            <span class="macro-label">Fat</span>
+        </div>
+        <div class="macro-stat carbs">
+            <span class="macro-value">{{ weekly_stats.total_carbs|floatformat:0 }}g / {{ weekly_macro_targets.carbs_target }}g</span>
+            <div class="macro-progress-bar">
+                <div class="macro-progress-fill carbs" style="width: {% widthratio weekly_stats.total_carbs weekly_macro_targets.carbs_target 100 %}%"></div>
+            </div>
+            <span class="macro-remaining {% if weekly_stats.carbs_remaining < 0 %}over{% endif %}">
+                {% if weekly_stats.carbs_remaining >= 0 %}Remaining: {{ weekly_stats.carbs_remaining }}g{% else %}Over: {{ weekly_stats.carbs_remaining|slice:"1:" }}g{% endif %}
+            </span>
+            <span class="macro-label">Carbs</span>
+        </div>
+    </div>
+    {% if weekly_stats.goal_achieved %}
+    <div class="goal-status success">
+        <span>Goal achieved! Great job this week!</span>
+    </div>
+    {% elif weekly_stats.days_with_entries > 0 %}
+    <div class="goal-status progress">
+        <span>Keep going! {{ 5|add:weekly_stats.days_goal_met|add:"-5" }} more days to reach goal</span>
+    </div>
+    {% else %}
+    <div class="goal-status empty">
+        <span>No data for this week. Start tracking your meals!</span>
+    </div>
+    {% endif %}
+</div>
+
+<div id="food-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Food</h3>
+            <button type="button" class="modal-close" onclick="toggleModal('food-modal')">&times;</button>
+        </div>
+        
+        <div class="tabs">
+            <button type="button" class="tab active" onclick="switchTab('from-list')">From list</button>
+            <button type="button" class="tab" onclick="switchTab('custom')">Custom</button>
+        </div>
+        
+        <div id="from-list" class="tab-content active">
+            <form method="post" action="{% url 'add_food' %}">
+                {% csrf_token %}
+                <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+                
+                <div class="form-group">
+                    <label for="food_name">Select product</label>
+                    <select id="food_name" name="food_name" required onchange="updateFoodPreview()">
+                        <option value="">Select from list</option>
+                        <optgroup label="Products">
+                            {% for food in products %}
+                            <option value="{{ food.name }}" data-calories="{{ food.calories }}" data-protein="{{ food.protein }}" data-fat="{{ food.fat }}" data-carbs="{{ food.carbs }}">
+                                {{ food.name }} ({{ food.calories }} kcal/100g)
+                            </option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Dishes">
+                            {% for food in dishes %}
+                            <option value="{{ food.name }}" data-calories="{{ food.calories }}" data-protein="{{ food.protein }}" data-fat="{{ food.fat }}" data-carbs="{{ food.carbs }}">
+                                {{ food.name }} ({{ food.calories }} kcal/100g)
+                            </option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="quantity">Quantity (grams)</label>
+                    <input type="number" id="quantity" name="quantity" value="100" min="1" required onchange="updateFoodPreview()">
+                </div>
+                
+                <div id="food-preview" class="preview-box" style="display:none;">
+                    <div class="preview-calories"><span id="preview-cal">0</span> kcal</div>
+                    <div class="preview-macros">
+                        <span>P: <span id="preview-protein">0</span>g</span>
+                        <span>F: <span id="preview-fat">0</span>g</span>
+                        <span>C: <span id="preview-carbs">0</span>g</span>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+        
+        <div id="custom" class="tab-content">
+            <form method="post" action="{% url 'add_custom_food' %}">
+                {% csrf_token %}
+                <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+                
+                <div class="form-group">
+                    <label for="custom_name">Food name</label>
+                    <input type="text" id="custom_name" name="name" placeholder="e.g., Homemade salad" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="custom_calories">Calories (kcal)</label>
+                    <input type="number" id="custom_calories" name="calories" placeholder="e.g., 250" min="1" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="custom_protein">Protein (g)</label>
+                        <input type="number" id="custom_protein" name="protein" placeholder="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="custom_fat">Fat (g)</label>
+                        <input type="number" id="custom_fat" name="fat" placeholder="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="custom_carbs">Carbs (g)</label>
+                        <input type="number" id="custom_carbs" name="carbs" placeholder="0" min="0">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="activity-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Activity</h3>
+            <button type="button" class="modal-close" onclick="toggleModal('activity-modal')">&times;</button>
+        </div>
+        
+        <form method="post" action="{% url 'add_activity' %}">
+            {% csrf_token %}
+            <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+            
+            <div class="form-group">
+                <label for="activity_name">Activity type</label>
+                <select id="activity_name" name="activity_name" required onchange="updateActivityPreview()">
+                    <option value="">Select activity</option>
+                    {% for activity in preset_activities %}
+                    <option value="{{ activity.name }}" data-calories="{{ activity.calories_per_30min }}">
+                        {{ activity.name }} (~{{ activity.calories_per_30min }} kcal/30min)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="duration">Duration (minutes)</label>
+                <input type="number" id="duration" name="duration" value="30" min="1" required onchange="updateActivityPreview()">
+            </div>
+            
+            <div id="activity-preview" class="preview-box" style="display:none;">
+                <div class="preview-calories negative">-<span id="preview-burned">0</span> kcal</div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.toggle('active');
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`[onclick="switchTab('${tabId}')"]`).classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+}
+
+function updateFoodPreview() {
+    const select = document.getElementById('food_name');
+    const quantity = parseInt(document.getElementById('quantity').value) || 100;
+    const selected = select.options[select.selectedIndex];
+    const preview = document.getElementById('food-preview');
+    
+    if (selected.value) {
+        const calories = parseInt(selected.dataset.calories) || 0;
+        const protein = parseInt(selected.dataset.protein) || 0;
+        const fat = parseInt(selected.dataset.fat) || 0;
+        const carbs = parseInt(selected.dataset.carbs) || 0;
+        
+        document.getElementById('preview-cal').textContent = Math.round(calories * quantity / 100);
+        document.getElementById('preview-protein').textContent = Math.round(protein * quantity / 100);
+        document.getElementById('preview-fat').textContent = Math.round(fat * quantity / 100);
+        document.getElementById('preview-carbs').textContent = Math.round(carbs * quantity / 100);
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+}
+
+function updateActivityPreview() {
+    const select = document.getElementById('activity_name');
+    const duration = parseInt(document.getElementById('duration').value) || 30;
+    const selected = select.options[select.selectedIndex];
+    const preview = document.getElementById('activity-preview');
+    
+    if (selected.value) {
+        const caloriesPer30 = parseInt(selected.dataset.calories) || 0;
+        const burned = Math.round((caloriesPer30 / 30) * duration);
+        document.getElementById('preview-burned').textContent = burned;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+}
+
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) toggleModal(modal.id);
+    });
+});
+</script>
+{% endblock %}

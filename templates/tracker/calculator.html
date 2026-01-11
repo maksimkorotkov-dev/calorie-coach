@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Calorie Calculator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Calorie Calculator</h1>
+    <p>Calculate your daily calorie needs using the Mifflin-St Jeor formula</p>
+</div>
+
+<div class="card">
+    <form method="post" class="calculator-form">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" name="age" value="{{ profile.age|default:25 }}" min="10" max="120" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="weight">Weight (kg)</label>
+                <input type="number" id="weight" name="weight" value="{{ profile.weight|default:70 }}" step="0.1" min="20" max="500" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="height">Height (cm)</label>
+                <input type="number" id="height" name="height" value="{{ profile.height|default:170 }}" min="50" max="300" required>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label>Gender</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="gender" value="male" {% if profile.gender == 'male' or not profile %}checked{% endif %}>
+                        <span>Male</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="gender" value="female" {% if profile.gender == 'female' %}checked{% endif %}>
+                        <span>Female</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="activity_level">Activity Level</label>
+            <select id="activity_level" name="activity_level" required>
+                {% for value, label in activity_choices %}
+                <option value="{{ value }}" {% if profile.activity_level == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="goal">Goal</label>
+            <select id="goal" name="goal" required>
+                {% for value, label in goal_choices %}
+                <option value="{{ value }}" {% if profile.goal == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Calculate</button>
+    </form>
+</div>
+
+{% if profile and profile.daily_calorie_target %}
+<div class="card result-card">
+    <h2>Your Results</h2>
+    <div class="result-grid">
+        <div class="result-item">
+            <span class="result-value">{{ profile.calculate_bmr|floatformat:0 }}</span>
+            <span class="result-label">BMR (kcal)</span>
+        </div>
+        <div class="result-item">
+            <span class="result-value">{{ profile.calculate_tdee|floatformat:0 }}</span>
+            <span class="result-label">TDEE (kcal)</span>
+        </div>
+        <div class="result-item result-highlight">
+            <span class="result-value">{{ profile.daily_calorie_target }}</span>
+            <span class="result-label">Daily Target (kcal)</span>
+        </div>
+    </div>
+    
+    <div class="result-explanation">
+        <p><strong>BMR</strong> (Basal Metabolic Rate) - calories your body burns at rest</p>
+        <p><strong>TDEE</strong> (Total Daily Energy Expenditure) - calories burned including activity</p>
+        <p><strong>Daily Target</strong> - your recommended calorie intake based on your goal</p>
+    </div>
+    
+    <a href="{% url 'diary' %}" class="btn btn-secondary">Go to Diary</a>
+</div>
+{% endif %}
+{% endblock %}
